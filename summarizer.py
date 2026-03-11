@@ -8,6 +8,8 @@ import requests
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
+from kz_constants import MRP, VAT_RATE_BASE, VAT_REGISTRATION_THRESHOLD
+
 
 def _rule_based_summary(result_df: pd.DataFrame) -> str:
     total = len(result_df)
@@ -44,6 +46,13 @@ def _rule_based_summary(result_df: pd.DataFrame) -> str:
     else:
         priority_lines = "- No priority documents"
 
+    kz_ref = (
+        f"**KZ 2026 reference (НК РК)**\n"
+        f"- Base VAT rate: {VAT_RATE_BASE:.0%} (НДС)\n"
+        f"- MRP: {MRP:,} KZT\n"
+        f"- VAT registration threshold: {VAT_REGISTRATION_THRESHOLD:,.0f} KZT"
+    )
+
     return f"""
 **Batch summary**
 - Invoices checked: **{total}**
@@ -56,6 +65,8 @@ def _rule_based_summary(result_df: pd.DataFrame) -> str:
 
 **Priority actions**
 {priority_lines}
+
+{kz_ref}
 """.strip()
 
 
