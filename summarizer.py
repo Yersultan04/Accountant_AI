@@ -1,5 +1,7 @@
 import pandas as pd
 
+from kz_constants import MRP, VAT_RATE_BASE, VAT_REGISTRATION_THRESHOLD
+
 
 def build_summary(result_df: pd.DataFrame) -> str:
     total = len(result_df)
@@ -36,6 +38,13 @@ def build_summary(result_df: pd.DataFrame) -> str:
     else:
         priority_lines = "- No priority documents"
 
+    kz_ref = (
+        f"**KZ 2026 reference (НК РК)**\n"
+        f"- Base VAT rate: {VAT_RATE_BASE:.0%} (НДС)\n"
+        f"- MRP: {MRP:,} KZT\n"
+        f"- VAT registration threshold: {VAT_REGISTRATION_THRESHOLD:,.0f} KZT"
+    )
+
     return f"""
 **Batch summary**
 - Invoices checked: **{total}**
@@ -48,4 +57,6 @@ def build_summary(result_df: pd.DataFrame) -> str:
 
 **Priority actions**
 {priority_lines}
+
+{kz_ref}
 """.strip()

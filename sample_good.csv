@@ -1,4 +1,4 @@
-invoice_id,invoice_date,seller_bin,buyer_bin,amount_without_vat,vat_amount,total_amount,currency,description
-INV-001,2026-03-01,123456789012,987654321098,100000,12000,112000,KZT,Office supplies
-INV-002,2026-03-02,123456789012,987654321099,250000,30000,280000,KZT,Consulting services
-INV-003,2026-03-03,123456789012,987654321097,75000,9000,84000,KZT,Maintenance
+invoice_id,invoice_date,seller_bin,buyer_bin,amount_without_vat,vat_amount,total_amount,currency,description,contract_number,vat_rate,ntin_code
+INV-001,2026-03-01,123456789012,987654321098,100000,16000,116000,KZT,Office supplies,CTR-2026-001,0.16,KZ-NTIN-00012345
+INV-002,2026-03-02,123456789012,987654321099,250000,40000,290000,KZT,IT equipment,CTR-2026-002,0.16,KZ-NTIN-00067890
+INV-003,2026-03-03,123456789012,987654321097,75000,12000,87000,KZT,Maintenance services,CTR-2026-003,0.16,KZ-NTIN-00011111
