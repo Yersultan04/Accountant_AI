@@ -1,0 +1,4 @@
+invoice_id,invoice_date,seller_bin,buyer_bin,amount_without_vat,vat_amount,total_amount,currency,description
+INV-001,2026-03-01,123456789012,987654321098,100000,12000,112000,KZT,Office supplies
+INV-002,2026-03-02,123456789012,987654321099,250000,30000,280000,KZT,Consulting services
+INV-003,2026-03-03,123456789012,987654321097,75000,9000,84000,KZT,Maintenance
