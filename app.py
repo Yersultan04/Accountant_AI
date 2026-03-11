@@ -1,13 +1,12 @@
 import io
-from typing import Optional
 
 import pandas as pd
 import streamlit as st
 
 from summarizer import build_summary
 
-
 STATUS_ORDER = {"Critical": 0, "Warning": 1, "OK": 2}
+STATUS_EMOJI = {"Critical": "🔴", "Warning": "🟠", "OK": "🟢"}
 REQUIRED_OUTPUT_COLUMNS = [
     "invoice_id",
     "status",
@@ -31,9 +30,8 @@ def _mock_validate(df: pd.DataFrame) -> pd.DataFrame:
     """Temporary fallback validator so UI works before backend integration."""
     result = df.copy()
     if "invoice_id" not in result.columns:
-        result["invoice_id"] = [f"ROW-{idx+1}" for idx in range(len(result))]
+        result["invoice_id"] = [f"ROW-{idx + 1}" for idx in range(len(result))]
 
-    # Light UI-safe fallback: if required contract is missing, generate demo outputs.
     result["issues"] = ""
     result["issues_count"] = 0
     result["risk_score"] = 0
@@ -48,9 +46,18 @@ def _mock_validate(df: pd.DataFrame) -> pd.DataFrame:
         buyer = str(result.get("buyer_bin", pd.Series(index=result.index, dtype=str)).get(idx, "") or "").strip()
         description = str(result.get("description", pd.Series(index=result.index, dtype=str)).get(idx, "") or "").strip()
 
-        amount = pd.to_numeric(result.get("amount_without_vat", pd.Series(index=result.index, dtype=float)).get(idx, 0), errors="coerce")
-        vat = pd.to_numeric(result.get("vat_amount", pd.Series(index=result.index, dtype=float)).get(idx, 0), errors="coerce")
-        total = pd.to_numeric(result.get("total_amount", pd.Series(index=result.index, dtype=float)).get(idx, 0), errors="coerce")
+        amount = pd.to_numeric(
+            result.get("amount_without_vat", pd.Series(index=result.index, dtype=float)).get(idx, 0),
+            errors="coerce",
+        )
+        vat = pd.to_numeric(
+            result.get("vat_amount", pd.Series(index=result.index, dtype=float)).get(idx, 0),
+            errors="coerce",
+        )
+        total = pd.to_numeric(
+            result.get("total_amount", pd.Series(index=result.index, dtype=float)).get(idx, 0),
+            errors="coerce",
+        )
 
         if len(seller) != 12 or not seller.isdigit():
             issues.append("Invalid seller BIN")
@@ -64,10 +71,9 @@ def _mock_validate(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(vat) or vat < 0:
             issues.append("vat_amount must be >= 0")
             score += 20
-        if not pd.isna(amount) and not pd.isna(vat) and not pd.isna(total):
-            if abs((amount + vat) - total) > 0.01:
-                issues.append("Total mismatch")
-                score += 30
+        if not pd.isna(amount) and not pd.isna(vat) and not pd.isna(total) and abs((amount + vat) - total) > 0.01:
+            issues.append("Total mismatch")
+            score += 30
         if not description:
             issues.append("Missing description")
             score += 10
@@ -92,7 +98,7 @@ def _mock_validate(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def run_validation(df: pd.DataFrame) -> pd.DataFrame:
+def run_validation(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     try:
         from validator import validate_invoices  # type: ignore
 
@@ -102,11 +108,11 @@ def run_validation(df: pd.DataFrame) -> pd.DataFrame:
             st.warning(
                 "Validator returned missing contract columns: " + ", ".join(missing) + ". Using UI fallback."
             )
-            return _mock_validate(df)
-        return validated
+            return _mock_validate(df), "fallback"
+        return validated, "backend"
     except Exception as exc:  # noqa: BLE001
         st.warning(f"Using fallback validator. Backend validator is not available yet ({exc}).")
-        return _mock_validate(df)
+        return _mock_validate(df), "fallback"
 
 
 def render_kpis(result_df: pd.DataFrame) -> None:
@@ -129,7 +135,22 @@ def apply_filters(result_df: pd.DataFrame, only_problematic: bool) -> pd.DataFra
 
     filtered["_status_order"] = filtered["status"].map(STATUS_ORDER).fillna(99)
     filtered = filtered.sort_values(by=["_status_order", "risk_score"], ascending=[True, False])
+    filtered["status"] = filtered["status"].map(lambda s: f"{STATUS_EMOJI.get(s, '⚪')} {s}")
     return filtered.drop(columns=["_status_order"])
+
+
+def style_rows_by_status(df: pd.DataFrame):
+    def _row_style(row: pd.Series):
+        value = str(row.get("status", ""))
+        if "Critical" in value:
+            return ["background-color: #ffe6e6"] * len(row)
+        if "Warning" in value:
+            return ["background-color: #fff4e6"] * len(row)
+        if "OK" in value:
+            return ["background-color: #e9f9ef"] * len(row)
+        return [""] * len(row)
+
+    return df.style.apply(_row_style, axis=1)
 
 
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
@@ -138,10 +159,30 @@ def to_csv_bytes(df: pd.DataFrame) -> bytes:
         return buffer.getvalue().encode("utf-8")
 
 
+def render_capabilities() -> None:
+    st.markdown(
+        """
+### Что MVP уже делает сейчас
+- Проверяет инвойсы до отправки (CSV/XLSX).
+- Возвращает статусы **OK / Warning / Critical** и риск-скоринг.
+- Показывает список проблем по каждому документу и рекомендацию к действию.
+- Строит сводку по батчу (Top issues + priority actions).
+- Экспортирует итоговый файл в CSV для передачи бухгалтеру.
+
+> Это **не только AI summary**. Summary — последний слой поверх валидации и риск-классификации.
+"""
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="AI ESF Pre-Check Copilot", layout="wide")
     st.title("AI ESF Pre-Check Copilot (Kazakhstan MVP)")
     st.caption("Pre-check tool. Final validation happens in official systems.")
+
+    with st.sidebar:
+        st.header("Demo mode")
+        st.markdown("- 🔴 Critical: likely rejection risk\n- 🟠 Warning: needs manual review\n- 🟢 OK: baseline checks passed")
+        render_capabilities()
 
     uploaded = st.file_uploader("Upload invoices (CSV/XLSX)", type=["csv", "xlsx", "xls"])
     if uploaded is None:
@@ -158,7 +199,12 @@ def main() -> None:
     st.dataframe(input_df.head(20), use_container_width=True)
 
     if st.button("Check invoices", type="primary"):
-        result_df = run_validation(input_df)
+        result_df, mode = run_validation(input_df)
+
+        if mode == "backend":
+            st.success("Using backend validator (Developer A integration active).")
+        else:
+            st.info("Using UI fallback validator (demo-safe mode).")
 
         st.subheader("Results")
         render_kpis(result_df)
@@ -166,7 +212,7 @@ def main() -> None:
         only_problematic = st.checkbox("Show only problematic", value=False)
         display_df = apply_filters(result_df, only_problematic)
 
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(style_rows_by_status(display_df), use_container_width=True)
 
         st.subheader("Top 3 issues")
         issues = (
