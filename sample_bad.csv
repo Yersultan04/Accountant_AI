@@ -1,0 +1,4 @@
+invoice_id,invoice_date,seller_bin,buyer_bin,amount_without_vat,vat_amount,total_amount,currency,description
+,2026-03-01,123,987654321098,100000,12000,110000,KZT,
+INV-100,2030-01-01,123456789012,,0,-1,10,KZT,
+INV-100,2026-03-02,123456789012,ABC,250000,30000,281000,KZT, 
