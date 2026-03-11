@@ -186,3 +186,19 @@ streamlit run app.py
 
 AI summary — это верхний слой объяснения результатов, а не единственная функция продукта.
 
+## 12) Groq LLM summary (optional)
+Если нужен реальный LLM summary вместо rule-based:
+
+```bash
+export GROQ_API_KEY="<your_groq_api_key>"
+# optional
+export GROQ_MODEL="llama-3.1-8b-instant"
+streamlit run app.py
+```
+
+Поведение:
+- если `GROQ_API_KEY` задан, `summarizer.py` запрашивает summary через Groq API;
+- если ключ не задан или API недоступен — автоматически используется rule-based fallback.
+
+> В целях безопасности ключ не хранится в репозитории и не хардкодится в коде.
+
