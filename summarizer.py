@@ -8,8 +8,6 @@ import requests
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-from kz_constants import MRP, VAT_RATE_BASE, VAT_REGISTRATION_THRESHOLD
-
 
 def _rule_based_summary(result_df: pd.DataFrame) -> str:
     total = len(result_df)
@@ -46,13 +44,6 @@ def _rule_based_summary(result_df: pd.DataFrame) -> str:
     else:
         priority_lines = "- No priority documents"
 
-    kz_ref = (
-        f"**KZ 2026 reference (НК РК)**\n"
-        f"- Base VAT rate: {VAT_RATE_BASE:.0%} (НДС)\n"
-        f"- MRP: {MRP:,} KZT\n"
-        f"- VAT registration threshold: {VAT_REGISTRATION_THRESHOLD:,.0f} KZT"
-    )
-
     return f"""
 **Batch summary**
 - Invoices checked: **{total}**
@@ -65,8 +56,6 @@ def _rule_based_summary(result_df: pd.DataFrame) -> str:
 
 **Priority actions**
 {priority_lines}
-
-{kz_ref}
 """.strip()
 
 
@@ -142,12 +131,19 @@ def _build_summary_with_groq(result_df: pd.DataFrame, api_key: str) -> str:
     return data["choices"][0]["message"]["content"].strip()
 
 
-def build_summary(result_df: pd.DataFrame) -> str:
+def build_summary_with_source(result_df: pd.DataFrame) -> tuple[str, str]:
+    """Return summary text and source label: 'groq' or 'rule-based'."""
     api_key = os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
-        return _rule_based_summary(result_df)
+        return _rule_based_summary(result_df), "rule-based"
 
     try:
-        return _build_summary_with_groq(result_df, api_key)
+        return _build_summary_with_groq(result_df, api_key), "groq"
     except Exception:
-        return _rule_based_summary(result_df)
+        return _rule_based_summary(result_df), "rule-based"
+
+
+def build_summary(result_df: pd.DataFrame) -> str:
+    """Backward-compatible helper used by older callers."""
+    summary, _ = build_summary_with_source(result_df)
+    return summary

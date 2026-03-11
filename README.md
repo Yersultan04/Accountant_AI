@@ -198,7 +198,8 @@ streamlit run app.py
 
 Поведение:
 - если `GROQ_API_KEY` задан, `summarizer.py` запрашивает summary через Groq API;
-- если ключ не задан или API недоступен — автоматически используется rule-based fallback.
+- если ключ не задан или API недоступен — автоматически используется rule-based fallback;
+- в UI под блоком **AI Summary** показывается источник: `Groq LLM` или `Rule-based template`.
 
 > В целях безопасности ключ не хранится в репозитории и не хардкодится в коде.
 

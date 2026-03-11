@@ -5,13 +5,6 @@ from typing import Any
 
 import pandas as pd
 
-from kz_constants import (
-    AMOUNT_SUSPICIOUS_HIGH,
-    VALID_CURRENCIES,
-    VAT_RATE_TOLERANCE,
-    VAT_RATES_VALID,
-)
-
 REQUIRED_OUTPUT_COLUMNS = [
     "invoice_id",
     "status",
@@ -32,8 +25,6 @@ COLUMN_ALIASES = {
     "currency": ["currency", "curr"],
     "contract_number": ["contract_number", "contract_no", "agreement_number"],
     "description": ["description", "purpose", "comment", "details"],
-    "vat_rate": ["vat_rate", "nds_rate", "nds_stavka"],
-    "ntin_code": ["ntin_code", "ntin", "xtin", "xtin_code", "catalog_code"],
 }
 
 
@@ -108,39 +99,6 @@ def _classify_status(score: int, has_critical_issue: bool) -> str:
     return "OK"
 
 
-def _validate_vat_rate(amount: float, vat: float, declared_rate: float | None) -> str | None:
-    if amount <= 0:
-        return None
-    actual_rate = vat / amount
-    if declared_rate is not None and abs(actual_rate - declared_rate) > VAT_RATE_TOLERANCE:
-        return f"Declared VAT rate ({declared_rate:.0%}) doesn't match actual ({actual_rate:.0%})"
-    for valid in VAT_RATES_VALID:
-        if abs(actual_rate - valid) <= VAT_RATE_TOLERANCE:
-            return None
-    return f"VAT rate {actual_rate:.1%} doesn't match any valid KZ 2026 rate (16%, 10%, 5%, 0%)"
-
-
-def _validate_currency(value: Any) -> str | None:
-    if _is_empty(value):
-        return "Missing currency"
-    curr = str(value).strip().upper()
-    if curr not in VALID_CURRENCIES:
-        return f"Unknown currency '{curr}' (expected: {', '.join(sorted(VALID_CURRENCIES))})"
-    return None
-
-
-def _validate_ntin(value: Any) -> str | None:
-    if _is_empty(value):
-        return "Missing NTIN/XTIN code (mandatory since 2026 for all goods)"
-    return None
-
-
-def _check_amount_bounds(amount: float) -> str | None:
-    if amount > AMOUNT_SUSPICIOUS_HIGH:
-        return f"Amount exceeds VAT registration threshold ({AMOUNT_SUSPICIOUS_HIGH:,.0f} KZT)"
-    return None
-
-
 def _recommended_action(issues: list[str], status: str) -> str:
     text = " | ".join(issues)
 
@@ -162,18 +120,6 @@ def _recommended_action(issues: list[str], status: str) -> str:
     if "Missing description/contract_number" in text:
         return "Fill description or contract number"
 
-    if "VAT rate" in text:
-        return "Verify VAT rate matches KZ 2026 rates (16%, 10%, 5%, 0%)"
-
-    if "currency" in text.lower():
-        return "Correct the currency code (KZT, USD, EUR, RUB, GBP, CNY)"
-
-    if "NTIN" in text or "XTIN" in text:
-        return "Add NTIN/XTIN code from National Goods Catalog"
-
-    if "threshold" in text.lower():
-        return "Verify large amount — may trigger VAT registration obligations"
-
     return "Review flagged fields before submission"
 
 
@@ -181,7 +127,7 @@ def validate_invoices(df: pd.DataFrame) -> pd.DataFrame:
     """
     Validate invoice rows and return result DataFrame with required UI contract columns.
 
-    Rules (1-10: original, 11-15: KZ 2026 domain):
+    Rules:
     1) Missing invoice_id
     2) Missing invoice_date
     3) Missing seller_bin / buyer_bin
@@ -192,16 +138,12 @@ def validate_invoices(df: pd.DataFrame) -> pd.DataFrame:
     8) Duplicate invoice_id
     9) invoice_date future / too old (> 5 years)
     10) Missing description and contract_number
-    11) VAT rate mismatch (KZ 2026: 16% base, 10% publications, 5% medicines, 0% exempt)
-    12) Invalid or unknown currency
-    13) Missing NTIN/XTIN code (mandatory since 2026)
-    14) Amount exceeds VAT registration threshold (43,250,000 KZT)
     """
     normalized = _ensure_required_columns(_normalize_columns(df))
     result = normalized.copy()
 
     invoice_ids = result["invoice_id"].astype(str).str.strip().fillna("")
-    duplicate_mask = invoice_ids.ne("") & invoice_ids.duplicated(keep="first")
+    duplicate_mask = invoice_ids.ne("") & invoice_ids.duplicated(keep=False)
 
     now = datetime.utcnow().date()
     oldest_date = now - timedelta(days=365 * 5)
@@ -308,34 +250,6 @@ def validate_invoices(df: pd.DataFrame) -> pd.DataFrame:
         if _is_empty(description) and _is_empty(contract_number):
             issues.append("Missing description/contract_number")
             score += 10
-
-        # 11 — VAT rate validation (KZ 2026)
-        if amount is not None and vat is not None and amount > 0 and vat >= 0:
-            vat_rate_raw = _to_number(row.get("vat_rate")) if "vat_rate" in result.columns else None
-            vat_issue = _validate_vat_rate(amount, vat, vat_rate_raw)
-            if vat_issue:
-                issues.append(vat_issue)
-                score += 15
-
-        # 12 — Currency validation
-        curr_issue = _validate_currency(row.get("currency"))
-        if curr_issue:
-            issues.append(curr_issue)
-            score += 10
-
-        # 13 — NTIN/XTIN code check (mandatory since 2026)
-        if "ntin_code" in result.columns:
-            ntin_issue = _validate_ntin(row.get("ntin_code"))
-            if ntin_issue:
-                issues.append(ntin_issue)
-                score += 10
-
-        # 14 — Amount bounds check
-        if amount is not None and amount > 0:
-            bounds_issue = _check_amount_bounds(amount)
-            if bounds_issue:
-                issues.append(bounds_issue)
-                score += 5
 
         score = min(100, score)
         status = _classify_status(score, has_critical_issue)
